@@ -29,6 +29,8 @@ typedef struct _IMAGE_DOS_HEADER {
     LONG e_lfanew;
 } IMAGE_DOS_HEADER, *PIMAGE_DOS_HEADER;
 
+#define IMAGE_DOS_SIGNATURE 0x5A4D     // MZ
+
 // Represents the COFF header format.
 // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_file_header
 
@@ -94,6 +96,84 @@ typedef struct _IMAGE_FILE_HEADER {
 #define IMAGE_FILE_DLL                     (0x2000) // The image is a DLL file. While it is an executable file, it cannot be run directly.
 #define IMAGE_FILE_UP_SYSTEM_ONLY          (0x4000) // The file should be run only on a uniprocessor computer.
 #define IMAGE_FILE_BYTES_REVERSED_HI       (0x8000) // The bytes of the word are reversed. This flag is obsolete.
+
+// Represents the image section header format.
+// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_section_header
+
+#define IMAGE_SIZEOF_SHORT_NAME 8
+
+typedef struct _IMAGE_SECTION_HEADER {
+  BYTE  Name[IMAGE_SIZEOF_SHORT_NAME];
+  union {
+    DWORD PhysicalAddress;
+    DWORD VirtualSize;
+  } Misc;
+  DWORD   VirtualAddress;
+  DWORD   SizeOfRawData;
+  DWORD   PointerToRawData;
+  DWORD   PointerToRelocations;
+  DWORD   PointerToLinenumbers;
+  WORD    NumberOfRelocations;
+  WORD    NumberOfLinenumbers;
+  DWORD   Characteristics;      // IMAGE_SCN_xxx
+} IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;
+
+// IMAGE_SCN_xxx
+
+#define IMAGE_SCN_TYPE_REG               (0x00000000)
+#define IMAGE_SCN_TYPE_DSECT             (0x00000001)
+#define IMAGE_SCN_TYPE_NOLOAD            (0x00000002)
+#define IMAGE_SCN_TYPE_GROUP             (0x00000004)
+#define IMAGE_SCN_TYPE_NO_PAD            (0x00000008)
+#define IMAGE_SCN_TYPE_COPY              (0x00000010)
+
+#define IMAGE_SCN_CNT_CODE               (0x00000020)
+#define IMAGE_SCN_CNT_INITIALIZED_DATA   (0x00000040)
+#define IMAGE_SCN_CNT_UNINITIALIZED_DATA (0x00000080)
+
+#define IMAGE_SCN_LNK_OTHER              (0x00000100)
+#define IMAGE_SCN_LNK_INFO               (0x00000200)
+
+#define IMAGE_SCN_TYPE_OVER              (0x00000400)
+
+#define IMAGE_SCN_LNK_REMOVE             (0x00000800)
+#define IMAGE_SCN_LNK_COMDAT             (0x00001000)
+
+#define IMAGE_SCN_NO_DEFER_SPEC_EXC      (0x00004000)
+
+#define IMAGE_SCN_GPREL                  (0x00008000)
+
+#define IMAGE_SCN_MEM_SYSHEAP            (0x00010000)
+#define IMAGE_SCN_MEM_PURGEABLE          (0x00020000)
+#define IMAGE_SCN_MEM_16BIT              (0x00020000)
+#define IMAGE_SCN_MEM_LOCKED             (0x00040000)
+#define IMAGE_SCN_MEM_PRELOAD            (0x00080000)
+
+#define IMAGE_SCN_ALIGN_1BYTES           (0x00100000)
+#define IMAGE_SCN_ALIGN_2BYTES           (0x00200000)
+#define IMAGE_SCN_ALIGN_4BYTES           (0x00300000)
+#define IMAGE_SCN_ALIGN_8BYTES           (0x00400000)
+#define IMAGE_SCN_ALIGN_16BYTES          (0x00500000) // Default Alignment
+#define IMAGE_SCN_ALIGN_32BYTES          (0x00600000)
+#define IMAGE_SCN_ALIGN_64BYTES          (0x00700000)
+#define IMAGE_SCN_ALIGN_128BYTES         (0x00800000)
+#define IMAGE_SCN_ALIGN_256BYTES         (0x00900000)
+#define IMAGE_SCN_ALIGN_512BYTES         (0x00A00000)
+#define IMAGE_SCN_ALIGN_1024BYTES        (0x00B00000)
+#define IMAGE_SCN_ALIGN_2048BYTES        (0x00C00000)
+#define IMAGE_SCN_ALIGN_4096BYTES        (0x00D00000)
+#define IMAGE_SCN_ALIGN_8192BYTES        (0x00E00000)
+#define IMAGE_SCN_ALIGN_MASK             (0x00F00000)
+
+#define IMAGE_SCN_LNK_NRELOC_OVFL        (0x01000000)
+
+#define IMAGE_SCN_MEM_DISCARDABLE        (0x02000000)
+#define IMAGE_SCN_MEM_NOT_CACHED         (0x04000000)
+#define IMAGE_SCN_MEM_NOT_PAGED          (0x08000000)
+#define IMAGE_SCN_MEM_SHARED             (0x10000000)
+#define IMAGE_SCN_MEM_EXECUTE            (0x20000000)
+#define IMAGE_SCN_MEM_READ               (0x40000000)
+#define IMAGE_SCN_MEM_WRITE              (0x80000000)
 
 // Represents the optional header format.
 // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_optional_header32
@@ -213,6 +293,8 @@ typedef struct _IMAGE_NT_HEADERS {
 } IMAGE_NT_HEADERS32, *PIMAGE_NT_HEADERS32;
 
 typedef IMAGE_NT_HEADERS32 IMAGE_NT_HEADERS, *PIMAGE_NT_HEADERS;
+
+#define IMAGE_NT_SIGNATURE  0x00004550 // PE00
 
 // The actual structure in WinNT.h is named IMAGE_NT_HEADERS32 and IMAGE_NT_HEADERS is defined as IMAGE_NT_HEADERS32.
 // However, if _WIN64 is defined, then IMAGE_NT_HEADERS is defined as IMAGE_NT_HEADERS64.

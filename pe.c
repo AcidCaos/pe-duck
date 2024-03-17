@@ -1,7 +1,7 @@
 #include <stdio.h> // sprintf
 #include <stdint.h> // uint32_t, uint64_t
 #include <Windows.h>
-#include <WinNT.h> // IMAGE_DOS_HEADER, IMAGE_NT_HEADERS, IMAGE_FILE_HEADER, IMAGE_OPTIONAL_HEADER, etc.
+// #include <WinNT.h> // IMAGE_DOS_HEADER, IMAGE_NT_HEADERS, IMAGE_FILE_HEADER, IMAGE_OPTIONAL_HEADER, etc.
 #include <errhandlingapi.h> // GetLastError
 
 #include "pe.h"
@@ -77,6 +77,11 @@ char* OpenReadFile(char* Path) {
 
 void PrintDOSHeader(IMAGE_DOS_HEADER* DOSHeader) {
 
+    if (DOSHeader->e_magic != IMAGE_DOS_SIGNATURE) {
+        printf("\r\n[!] Error: Could not find DOS signature.\r\n");
+        exit(1);
+    }
+
     printf("\r\n[+] DOS header\r\n");
     printf(" * Magic number: 0x%x\r\n", DOSHeader->e_magic);
     printf(" * Bytes on last page of file: 0x%x\r\n", DOSHeader->e_cblp);
@@ -96,6 +101,164 @@ void PrintDOSHeader(IMAGE_DOS_HEADER* DOSHeader) {
     printf(" * OEM information; e_oemid specific: 0x%x\r\n", DOSHeader->e_oeminfo);
     printf(" * File address of new exe header: 0x%x\r\n", DOSHeader->e_lfanew);
 }
+
+// Image Optional Header: helper functions
+
+char* VerboseSubsystem(uint16_t Subsystem) {
+    switch (Subsystem) {
+        case IMAGE_SUBSYSTEM_UNKNOWN:
+            return "Unknown";
+        case IMAGE_SUBSYSTEM_NATIVE:
+            return "Native";
+        case IMAGE_SUBSYSTEM_WINDOWS_GUI:
+            return "Windows GUI";
+        case IMAGE_SUBSYSTEM_WINDOWS_CUI:
+            return "Windows CUI";
+        case IMAGE_SUBSYSTEM_OS2_CUI:
+            return "OS/2 CUI";
+        case IMAGE_SUBSYSTEM_POSIX_CUI:
+            return "POSIX CUI";
+        case IMAGE_SUBSYSTEM_NATIVE_WINDOWS:
+            return "Native Windows";
+        case IMAGE_SUBSYSTEM_WINDOWS_CE_GUI:
+            return "Windows CE GUI";
+        case IMAGE_SUBSYSTEM_EFI_APPLICATION:
+            return "EFI Application";
+        case IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER:
+            return "EFI Boot Service Driver";
+        case IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER:
+            return "EFI Runtime Driver";
+        case IMAGE_SUBSYSTEM_EFI_ROM:
+            return "EFI ROM";
+        case IMAGE_SUBSYSTEM_XBOX:
+            return "XBOX";
+        case IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION:
+            return "Windows Boot Application";
+        case IMAGE_SUBSYSTEM_XBOX_CODE_CATALOG:
+            return "XBOX Code Catalog";
+        default:
+            return "Unknown";
+    }
+}
+
+char* VerboseDllCharacteristic(uint16_t DllCharacteristics) {
+    switch (DllCharacteristics) {
+        case IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA:
+            return "High entropy 64-bit Virtual Adress space";
+        case IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE:
+            return "Dynamic base (DLL can move)";
+        case IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY:
+            return "Force integrity";
+        case IMAGE_DLLCHARACTERISTICS_NX_COMPAT:
+            return "NX compatible";
+        case IMAGE_DLLCHARACTERISTICS_NO_ISOLATION:
+            return "No isolation";
+        case IMAGE_DLLCHARACTERISTICS_NO_SEH:
+            return "Not using SEH";
+        case IMAGE_DLLCHARACTERISTICS_NO_BIND:
+            return "Do not bind";
+        case IMAGE_DLLCHARACTERISTICS_APPCONTAINER:
+            return "Execute in an App container";
+        case IMAGE_DLLCHARACTERISTICS_WDM_DRIVER:
+            return "Driver uses WDM model";
+        case IMAGE_DLLCHARACTERISTICS_GUARD_CF:
+            return "Supports Control Flow Guard";
+        case IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE:
+            return "Terminal server aware";
+        default:
+            return "Unknown";
+    }
+}
+
+void PrintDllCharacteristics(uint16_t DllCharacteristics) {
+    for (int i = 0; i < 16; i++) {
+        if (DllCharacteristics & (1 << i)) {
+            printf("   - %s\r\n", VerboseDllCharacteristic(1 << i));
+        }
+    }
+}
+
+// Image Optional Header (32 and 64 bit)
+
+void PrintOptionalHeader32(IMAGE_OPTIONAL_HEADER32* OptionalHeader) {
+
+    printf("\r\n[+] Optional header 32-bit\r\n");
+
+    printf(" * Magic: 0x%x\r\n", OptionalHeader->Magic);
+    printf(" * Major linker version: 0x%x\r\n", OptionalHeader->MajorLinkerVersion);
+    printf(" * Minor linker version: 0x%x\r\n", OptionalHeader->MinorLinkerVersion);
+    printf(" * Size of code: 0x%x\r\n", OptionalHeader->SizeOfCode);
+    printf(" * Size of initialized data: 0x%x\r\n", OptionalHeader->SizeOfInitializedData);
+    printf(" * Size of uninitialized data: 0x%x\r\n", OptionalHeader->SizeOfUninitializedData);
+    printf(" * Address of entry point: 0x%x\r\n", OptionalHeader->AddressOfEntryPoint);
+    printf(" * Base of Code: 0x%x\r\n", OptionalHeader->BaseOfCode);
+    printf(" * Image Base: 0x%x\r\n", OptionalHeader->ImageBase);
+    printf(" * Section Alignment: 0x%x\r\n", OptionalHeader->SectionAlignment);
+    printf(" * File Alignment: 0x%x\r\n", OptionalHeader->FileAlignment);
+    printf(" * Major operating system version: 0x%x\r\n", OptionalHeader->MajorOperatingSystemVersion);
+    printf(" * Minor operating system version: 0x%x\r\n", OptionalHeader->MinorOperatingSystemVersion);
+    printf(" * Major image version: 0x%x\r\n", OptionalHeader->MajorImageVersion);
+    printf(" * Minor image version: 0x%x\r\n", OptionalHeader->MinorImageVersion);
+    printf(" * Major subsystem version: 0x%x\r\n", OptionalHeader->MajorSubsystemVersion);
+    printf(" * Minor subsystem version: 0x%x\r\n", OptionalHeader->MinorSubsystemVersion);
+    printf(" * Win32 Version Value: 0x%x\r\n", OptionalHeader->Win32VersionValue);
+    printf(" * Size of image: 0x%x\r\n", OptionalHeader->SizeOfImage);
+    printf(" * Size of headers: 0x%x\r\n", OptionalHeader->SizeOfHeaders);
+    printf(" * Checksum: 0x%x\r\n", OptionalHeader->CheckSum);
+    printf(" * Subsystem: %s\r\n", VerboseSubsystem(OptionalHeader->Subsystem));
+    printf(" * DLL characteristics (0x%x):\r\n", OptionalHeader->DllCharacteristics);
+    PrintDllCharacteristics(OptionalHeader->DllCharacteristics);
+    printf(" * Size of stack reserve: 0x%x\r\n", OptionalHeader->SizeOfStackReserve);
+    printf(" * Size of stack commit: 0x%x\r\n", OptionalHeader->SizeOfStackCommit);
+    printf(" * Size of heap reserve: 0x%x\r\n", OptionalHeader->SizeOfHeapReserve);
+    printf(" * Size of heap commit: 0x%x\r\n", OptionalHeader->SizeOfHeapCommit);
+    printf(" * Loader flags: 0x%x\r\n", OptionalHeader->LoaderFlags); // TODO map
+    printf(" * Number of RVA and sizes: 0x%x\r\n", OptionalHeader->NumberOfRvaAndSizes);
+}
+
+void PrintOptionalHeader64(IMAGE_OPTIONAL_HEADER64* OptionalHeader) {
+
+    printf("\r\n[+] Optional header 64-bit\r\n");
+
+    printf(" * Magic: 0x%x\r\n", OptionalHeader->Magic);
+    printf(" * Major linker version: 0x%x\r\n", OptionalHeader->MajorLinkerVersion);
+    printf(" * Minor linker version: 0x%x\r\n", OptionalHeader->MinorLinkerVersion);
+    printf(" * Size of code: 0x%x\r\n", OptionalHeader->SizeOfCode);
+    printf(" * Size of initialized data: 0x%x\r\n", OptionalHeader->SizeOfInitializedData);
+    printf(" * Size of uninitialized data: 0x%x\r\n", OptionalHeader->SizeOfUninitializedData);
+    printf(" * Address of entry point: 0x%x\r\n", OptionalHeader->AddressOfEntryPoint);
+    printf(" * Base of Code: 0x%x\r\n", OptionalHeader->BaseOfCode);
+    printf(" * Image Base: 0x%llx\r\n", OptionalHeader->ImageBase);
+    printf(" * Section Alignment: 0x%x\r\n", OptionalHeader->SectionAlignment);
+    printf(" * File Alignment: 0x%x\r\n", OptionalHeader->FileAlignment);
+    printf(" * Major operating system version: 0x%x\r\n", OptionalHeader->MajorOperatingSystemVersion);
+    printf(" * Minor operating system version: 0x%x\r\n", OptionalHeader->MinorOperatingSystemVersion);
+    printf(" * Major image version: 0x%x\r\n", OptionalHeader->MajorImageVersion);
+    printf(" * Minor image version: 0x%x\r\n", OptionalHeader->MinorImageVersion);
+    printf(" * Major subsystem version: 0x%x\r\n", OptionalHeader->MajorSubsystemVersion);
+    printf(" * Minor subsystem version: 0x%x\r\n", OptionalHeader->MinorSubsystemVersion);
+    printf(" * Win32 Version Value: 0x%x\r\n", OptionalHeader->Win32VersionValue);
+    printf(" * Size of image: 0x%x\r\n", OptionalHeader->SizeOfImage);
+    printf(" * Size of headers: 0x%x\r\n", OptionalHeader->SizeOfHeaders);
+    printf(" * Checksum: 0x%x\r\n", OptionalHeader->CheckSum);
+    printf(" * Subsystem: %s\r\n", VerboseSubsystem(OptionalHeader->Subsystem));
+    printf(" * DLL characteristics (0x%x):\r\n", OptionalHeader->DllCharacteristics);
+    PrintDllCharacteristics(OptionalHeader->DllCharacteristics);
+    printf(" * Size of stack reserve: 0x%llx\r\n", OptionalHeader->SizeOfStackReserve);
+    printf(" * Size of stack commit: 0x%llx\r\n", OptionalHeader->SizeOfStackCommit);
+    printf(" * Size of heap reserve: 0x%llx\r\n", OptionalHeader->SizeOfHeapReserve);
+    printf(" * Size of heap commit: 0x%llx\r\n", OptionalHeader->SizeOfHeapCommit);
+    printf(" * Loader flags: 0x%x\r\n", OptionalHeader->LoaderFlags); // TODO map
+    printf(" * Number of RVA and sizes: 0x%x\r\n", OptionalHeader->NumberOfRvaAndSizes);
+}
+
+// Section
+
+void PrintSymbols(DWORD PointerToSymbolTable, DWORD NumberOfSymbols) {
+    // TODO
+}
+
+// File Header: helper functions
 
 char* VerboseImageMachine(uint16_t Machine) {
     switch (Machine) {
@@ -205,7 +368,7 @@ char* VerboseCharacteristic(uint16_t Characteristics) {
     }
 }
 
-void PrintCharacteristics(uint16_t Characteristics) {
+void PrintFileHeaderCharacteristics(uint16_t Characteristics) {
     for (int i = 0; i < 16; i++) {
         if (Characteristics & (1 << i)) {
             printf("   - %s\r\n", VerboseCharacteristic(1 << i));
@@ -213,88 +376,12 @@ void PrintCharacteristics(uint16_t Characteristics) {
     }
 }
 
-char* VerboseSubsystem(uint16_t Subsystem) {
-    switch (Subsystem) {
-        case IMAGE_SUBSYSTEM_UNKNOWN:
-            return "Unknown";
-        case IMAGE_SUBSYSTEM_NATIVE:
-            return "Native";
-        case IMAGE_SUBSYSTEM_WINDOWS_GUI:
-            return "Windows GUI";
-        case IMAGE_SUBSYSTEM_WINDOWS_CUI:
-            return "Windows CUI";
-        case IMAGE_SUBSYSTEM_OS2_CUI:
-            return "OS/2 CUI";
-        case IMAGE_SUBSYSTEM_POSIX_CUI:
-            return "POSIX CUI";
-        case IMAGE_SUBSYSTEM_NATIVE_WINDOWS:
-            return "Native Windows";
-        case IMAGE_SUBSYSTEM_WINDOWS_CE_GUI:
-            return "Windows CE GUI";
-        case IMAGE_SUBSYSTEM_EFI_APPLICATION:
-            return "EFI Application";
-        case IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER:
-            return "EFI Boot Service Driver";
-        case IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER:
-            return "EFI Runtime Driver";
-        case IMAGE_SUBSYSTEM_EFI_ROM:
-            return "EFI ROM";
-        case IMAGE_SUBSYSTEM_XBOX:
-            return "XBOX";
-        case IMAGE_SUBSYSTEM_WINDOWS_BOOT_APPLICATION:
-            return "Windows Boot Application";
-        case IMAGE_SUBSYSTEM_XBOX_CODE_CATALOG:
-            return "XBOX Code Catalog";
-        default:
-            return "Unknown";
-    }
-}
+// File Header
 
-char* VerboseDllCharacteristic(uint16_t DllCharacteristics) {
-    switch (DllCharacteristics) {
-        case IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA:
-            return "High entropy 64-bit Virtual Adress space";
-        case IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE:
-            return "Dynamic base (DLL can move)";
-        case IMAGE_DLLCHARACTERISTICS_FORCE_INTEGRITY:
-            return "Force integrity";
-        case IMAGE_DLLCHARACTERISTICS_NX_COMPAT:
-            return "NX compatible";
-        case IMAGE_DLLCHARACTERISTICS_NO_ISOLATION:
-            return "No isolation";
-        case IMAGE_DLLCHARACTERISTICS_NO_SEH:
-            return "Not using SEH";
-        case IMAGE_DLLCHARACTERISTICS_NO_BIND:
-            return "Do not bind";
-        case IMAGE_DLLCHARACTERISTICS_APPCONTAINER:
-            return "Execute in an App container";
-        case IMAGE_DLLCHARACTERISTICS_WDM_DRIVER:
-            return "Driver uses WDM model";
-        case IMAGE_DLLCHARACTERISTICS_GUARD_CF:
-            return "Supports Control Flow Guard";
-        case IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE:
-            return "Terminal server aware";
-        default:
-            return "Unknown";
-    }
-}
-
-void PrintDllCharacteristics(uint16_t DllCharacteristics) {
-    for (int i = 0; i < 16; i++) {
-        if (DllCharacteristics & (1 << i)) {
-            printf("   - %s\r\n", VerboseDllCharacteristic(1 << i));
-        }
-    }
-}
-
-void PrintNTHeader(IMAGE_NT_HEADERS* NTHeader) {
-
-    printf("\r\n[+] NT header\r\n");
-    printf(" * Signature: 0x%x\r\n", NTHeader->Signature);
-
-    IMAGE_FILE_HEADER* FileHeader = (IMAGE_FILE_HEADER*) &NTHeader->FileHeader;
+void PrintFileHeader(IMAGE_FILE_HEADER* FileHeader) {
 
     printf("\r\n[+] File header\r\n");
+
     printf(" * Machine: %s (0x%x)\r\n", VerboseImageMachine(FileHeader->Machine), FileHeader->Machine);
     printf(" * Number of sections: 0x%x\r\n", FileHeader->NumberOfSections);
     printf(" * Time date stamp: 0x%x\r\n", FileHeader->TimeDateStamp);
@@ -302,77 +389,165 @@ void PrintNTHeader(IMAGE_NT_HEADERS* NTHeader) {
     printf(" * Number of symbols: 0x%x\r\n", FileHeader->NumberOfSymbols);
     printf(" * Size of optional header: 0x%x\r\n", FileHeader->SizeOfOptionalHeader);
     printf(" * Characteristics (0x%x):\r\n", FileHeader->Characteristics);
-    PrintCharacteristics(FileHeader->Characteristics);
-    
-    printf("\r\n[+] Optional header\r\n");
+    PrintFileHeaderCharacteristics(FileHeader->Characteristics);
+
+    // PrintSymbols(FileHeader->PointerToSymbolTable, FileHeader->NumberOfSymbols);
+}
+
+// NT Header
+
+void PrintNTHeader(IMAGE_NT_HEADERS* NTHeader) {
+
+    printf("\r\n[+] NT header\r\n");
+
+    if(NTHeader->Signature != IMAGE_NT_SIGNATURE) {
+        printf("[!] Error: Could not find NT signature.\r\n");
+        exit(1);
+    }
+
+    printf(" * Signature: 0x%x\r\n", NTHeader->Signature);
+
+    IMAGE_FILE_HEADER* FileHeader = (IMAGE_FILE_HEADER*) &NTHeader->FileHeader;
+    PrintFileHeader(FileHeader);
+
     if (FileHeader->Machine == IMAGE_FILE_MACHINE_I386) {
         IMAGE_OPTIONAL_HEADER32* OptionalHeader = (IMAGE_OPTIONAL_HEADER32*) &NTHeader->OptionalHeader;
-        printf(" * Magic: 0x%x\r\n", OptionalHeader->Magic);
-        printf(" * Major linker version: 0x%x\r\n", OptionalHeader->MajorLinkerVersion);
-        printf(" * Minor linker version: 0x%x\r\n", OptionalHeader->MinorLinkerVersion);
-        printf(" * Size of code: 0x%x\r\n", OptionalHeader->SizeOfCode);
-        printf(" * Size of initialized data: 0x%x\r\n", OptionalHeader->SizeOfInitializedData);
-        printf(" * Size of uninitialized data: 0x%x\r\n", OptionalHeader->SizeOfUninitializedData);
-        printf(" * Address of entry point: 0x%x\r\n", OptionalHeader->AddressOfEntryPoint);
-        printf(" * Base of Code: 0x%x\r\n", OptionalHeader->BaseOfCode);
-        printf(" * Image Base: 0x%x\r\n", OptionalHeader->ImageBase);
-        printf(" * Section Alignment: 0x%x\r\n", OptionalHeader->SectionAlignment);
-        printf(" * File Alignment: 0x%x\r\n", OptionalHeader->FileAlignment);
-        printf(" * Major operating system version: 0x%x\r\n", OptionalHeader->MajorOperatingSystemVersion);
-        printf(" * Minor operating system version: 0x%x\r\n", OptionalHeader->MinorOperatingSystemVersion);
-        printf(" * Major image version: 0x%x\r\n", OptionalHeader->MajorImageVersion);
-        printf(" * Minor image version: 0x%x\r\n", OptionalHeader->MinorImageVersion);
-        printf(" * Major subsystem version: 0x%x\r\n", OptionalHeader->MajorSubsystemVersion);
-        printf(" * Minor subsystem version: 0x%x\r\n", OptionalHeader->MinorSubsystemVersion);
-        printf(" * Win32 Version Value: 0x%x\r\n", OptionalHeader->Win32VersionValue);
-        printf(" * Size of image: 0x%x\r\n", OptionalHeader->SizeOfImage);
-        printf(" * Size of headers: 0x%x\r\n", OptionalHeader->SizeOfHeaders);
-        printf(" * Checksum: 0x%x\r\n", OptionalHeader->CheckSum);
-        printf(" * Subsystem: %s\r\n", VerboseSubsystem(OptionalHeader->Subsystem));
-        printf(" * DLL characteristics (0x%x):\r\n", OptionalHeader->DllCharacteristics);
-        PrintDllCharacteristics(OptionalHeader->DllCharacteristics);
-        printf(" * Size of stack reserve: 0x%x\r\n", OptionalHeader->SizeOfStackReserve);
-        printf(" * Size of stack commit: 0x%x\r\n", OptionalHeader->SizeOfStackCommit);
-        printf(" * Size of heap reserve: 0x%x\r\n", OptionalHeader->SizeOfHeapReserve);
-        printf(" * Size of heap commit: 0x%x\r\n", OptionalHeader->SizeOfHeapCommit);
-        printf(" * Loader flags: 0x%x\r\n", OptionalHeader->LoaderFlags); // TODO map
-        printf(" * Number of RVA and sizes: 0x%x\r\n", OptionalHeader->NumberOfRvaAndSizes);
+        PrintOptionalHeader32(OptionalHeader);
     }
     else if (FileHeader->Machine == IMAGE_FILE_MACHINE_IA64 || FileHeader->Machine == IMAGE_FILE_MACHINE_AMD64) {
         IMAGE_OPTIONAL_HEADER64* OptionalHeader = (IMAGE_OPTIONAL_HEADER64*) &NTHeader->OptionalHeader;
-        printf(" * Magic: 0x%x\r\n", OptionalHeader->Magic);
-        printf(" * Major linker version: 0x%x\r\n", OptionalHeader->MajorLinkerVersion);
-        printf(" * Minor linker version: 0x%x\r\n", OptionalHeader->MinorLinkerVersion);
-        printf(" * Size of code: 0x%x\r\n", OptionalHeader->SizeOfCode);
-        printf(" * Size of initialized data: 0x%x\r\n", OptionalHeader->SizeOfInitializedData);
-        printf(" * Size of uninitialized data: 0x%x\r\n", OptionalHeader->SizeOfUninitializedData);
-        printf(" * Address of entry point: 0x%x\r\n", OptionalHeader->AddressOfEntryPoint);
-        printf(" * Base of Code: 0x%x\r\n", OptionalHeader->BaseOfCode);
-        printf(" * Image Base: 0x%llx\r\n", OptionalHeader->ImageBase);
-        printf(" * Section Alignment: 0x%x\r\n", OptionalHeader->SectionAlignment);
-        printf(" * File Alignment: 0x%x\r\n", OptionalHeader->FileAlignment);
-        printf(" * Major operating system version: 0x%x\r\n", OptionalHeader->MajorOperatingSystemVersion);
-        printf(" * Minor operating system version: 0x%x\r\n", OptionalHeader->MinorOperatingSystemVersion);
-        printf(" * Major image version: 0x%x\r\n", OptionalHeader->MajorImageVersion);
-        printf(" * Minor image version: 0x%x\r\n", OptionalHeader->MinorImageVersion);
-        printf(" * Major subsystem version: 0x%x\r\n", OptionalHeader->MajorSubsystemVersion);
-        printf(" * Minor subsystem version: 0x%x\r\n", OptionalHeader->MinorSubsystemVersion);
-        printf(" * Win32 Version Value: 0x%x\r\n", OptionalHeader->Win32VersionValue);
-        printf(" * Size of image: 0x%x\r\n", OptionalHeader->SizeOfImage);
-        printf(" * Size of headers: 0x%x\r\n", OptionalHeader->SizeOfHeaders);
-        printf(" * Checksum: 0x%x\r\n", OptionalHeader->CheckSum);
-        printf(" * Subsystem: %s\r\n", VerboseSubsystem(OptionalHeader->Subsystem));
-        printf(" * DLL characteristics (0x%x):\r\n", OptionalHeader->DllCharacteristics);
-        PrintDllCharacteristics(OptionalHeader->DllCharacteristics);
-        printf(" * Size of stack reserve: 0x%llx\r\n", OptionalHeader->SizeOfStackReserve);
-        printf(" * Size of stack commit: 0x%llx\r\n", OptionalHeader->SizeOfStackCommit);
-        printf(" * Size of heap reserve: 0x%llx\r\n", OptionalHeader->SizeOfHeapReserve);
-        printf(" * Size of heap commit: 0x%llx\r\n", OptionalHeader->SizeOfHeapCommit);
-        printf(" * Loader flags: 0x%x\r\n", OptionalHeader->LoaderFlags); // TODO map
-        printf(" * Number of RVA and sizes: 0x%x\r\n", OptionalHeader->NumberOfRvaAndSizes);
-
+        PrintOptionalHeader64(OptionalHeader);
     }
 }
+
+// Section Header: helper functions
+
+char* VerboseSectionCharacteristic(uint32_t Characteristics) {
+
+    switch (Characteristics) {
+        /*case IMAGE_SCN_TYPE_DSECT:
+            return "Reserved";
+        case IMAGE_SCN_TYPE_NOLOAD:
+            return "Do not load section into memory";
+        case IMAGE_SCN_TYPE_GROUP:
+            return "Section contains COMDAT data";*/
+        case IMAGE_SCN_TYPE_NO_PAD:
+            return "Section should not be padded to the next boundary";
+        /*case IMAGE_SCN_TYPE_COPY:
+            return "Section contains initialized data";*/
+        case IMAGE_SCN_CNT_CODE:
+            return "Section contains executable code";
+        case IMAGE_SCN_CNT_INITIALIZED_DATA:
+            return "Section contains initialized data";
+        case IMAGE_SCN_CNT_UNINITIALIZED_DATA:
+            return "Section contains uninitialized data";
+        case IMAGE_SCN_LNK_OTHER:
+            return "Reserved";
+        case IMAGE_SCN_LNK_INFO:
+            return "Section contains comments or other information";
+        /*case IMAGE_SCN_TYPE_OVER:
+            return "Reserved";*/
+        case IMAGE_SCN_LNK_REMOVE:
+            return "Section will not become part of the image";
+        case IMAGE_SCN_LNK_COMDAT:
+            return "Section contains COMDAT data";
+        case IMAGE_SCN_NO_DEFER_SPEC_EXC:
+            return "Reset speculative exceptions handling bits in the TLB entries for this section";
+        case IMAGE_SCN_GPREL:
+            return "Section contains data referenced through the global pointer (GP)";
+        case IMAGE_SCN_MEM_PURGEABLE:
+            return "Reserved";
+        /*case IMAGE_SCN_MEM_16BIT:
+            return "Reserved";*/
+        case IMAGE_SCN_MEM_LOCKED:
+            return "Reserved";
+        case IMAGE_SCN_MEM_PRELOAD:
+            return "Reserved";
+        case IMAGE_SCN_ALIGN_1BYTES:
+            return "Align data on a 1-byte boundary";
+        case IMAGE_SCN_ALIGN_2BYTES:
+            return "Align data on a 2-byte boundary";
+        case IMAGE_SCN_ALIGN_4BYTES:
+            return "Align data on a 4-byte boundary";
+        case IMAGE_SCN_ALIGN_8BYTES:
+            return "Align data on an 8-byte boundary";
+        case IMAGE_SCN_ALIGN_16BYTES:
+            return "Align data on a 16-byte boundary";
+        case IMAGE_SCN_ALIGN_32BYTES:
+            return "Align data on a 32-byte boundary";
+        case IMAGE_SCN_ALIGN_64BYTES:
+            return "Align data on a 64-byte boundary";
+        case IMAGE_SCN_ALIGN_128BYTES:
+            return "Align data on a 128-byte boundary";
+        case IMAGE_SCN_ALIGN_256BYTES:
+            return "Align data on a 256-byte boundary";
+        case IMAGE_SCN_ALIGN_512BYTES:
+            return "Align data on a 512-byte boundary";
+        case IMAGE_SCN_ALIGN_1024BYTES:
+            return "Align data on a 1024-byte boundary";
+        case IMAGE_SCN_ALIGN_2048BYTES:
+            return "Align data on a 2048-byte boundary";
+        case IMAGE_SCN_ALIGN_4096BYTES:
+            return "Align data on a 4096-byte boundary";
+        case IMAGE_SCN_ALIGN_8192BYTES:
+            return "Align data on an 8192-byte boundary";
+        case IMAGE_SCN_LNK_NRELOC_OVFL:
+            return "Section contains extended relocations";
+        case IMAGE_SCN_MEM_DISCARDABLE:
+            return "Section can be discarded";
+        case IMAGE_SCN_MEM_NOT_CACHED:
+            return "Section cannot be cached";
+        case IMAGE_SCN_MEM_NOT_PAGED:
+            return "Section is not pageable";
+        case IMAGE_SCN_MEM_SHARED:
+            return "Section can be shared in memory";
+        case IMAGE_SCN_MEM_EXECUTE:
+            return "Section can be executed as code";
+        case IMAGE_SCN_MEM_READ:
+            return "Section can be read";
+        case IMAGE_SCN_MEM_WRITE:
+            return "Section can be written to";
+        default:
+            return "Unknown";
+    }
+}
+
+void PrintSectionCharacteristics(uint32_t Characteristics) {
+    for (int i = 0; i < 32; i++) {
+        if (Characteristics & (1 << i)) {
+            printf("     - %s\r\n", VerboseSectionCharacteristic(1 << i));
+        }
+    }
+}
+
+// Section Header
+
+void PrintSectionHeader(IMAGE_SECTION_HEADER* SectionHeader) {
+
+    printf(" * Section name: %s\r\n", SectionHeader->Name);
+    printf("   - Virtual Size: 0x%x\r\n", SectionHeader->Misc.VirtualSize);
+    printf("   - Virtual Address: 0x%x\r\n", SectionHeader->VirtualAddress);
+    printf("   - Size of Raw Data: %d\r\n", SectionHeader->SizeOfRawData);
+    printf("   - Pointer to Raw Data: 0x%x\r\n", SectionHeader->PointerToRawData);
+    printf("   - Pointer to Relocations: 0x%x\r\n", SectionHeader->PointerToRelocations);
+    printf("   - Pointer to Line numbers: 0x%x\r\n", SectionHeader->PointerToLinenumbers);
+    printf("   - Number of Relocations: %d\r\n", SectionHeader->NumberOfRelocations);
+    printf("   - Number of Line numbers: %d\r\n", SectionHeader->NumberOfLinenumbers);
+    printf("   - Characteristics: 0x%x\r\n", SectionHeader->Characteristics);
+    PrintSectionCharacteristics(SectionHeader->Characteristics);
+}
+
+void PrintSectionsHeaders(IMAGE_SECTION_HEADER* SectionTable, WORD NumberOfSections) {
+
+    printf("\r\n[+] Sections headers\r\n");
+
+    for (WORD i = 0; i < NumberOfSections; i++) {
+        IMAGE_SECTION_HEADER* SectionHeader = &SectionTable[i];
+        PrintSectionHeader(SectionHeader);
+    }
+}
+
+// PE
 
 void PrintPE(char* Buffer) {
 
@@ -385,6 +560,11 @@ void PrintPE(char* Buffer) {
     // Print NT header
     IMAGE_NT_HEADERS* NTHeader = (IMAGE_NT_HEADERS*) (Buffer + DOSHeader->e_lfanew);
     PrintNTHeader(NTHeader);
+
+    // Print Sections headers
+    IMAGE_SECTION_HEADER* SectionTable = (IMAGE_SECTION_HEADER*) (((char*) NTHeader) + sizeof(IMAGE_NT_HEADERS));
+    WORD NumberOfSections = NTHeader->FileHeader.NumberOfSections;
+    PrintSectionsHeaders(SectionTable, NumberOfSections);
 }
 
 // Main
@@ -405,7 +585,7 @@ int main(int argc, char* argv[]) {
  _____ _____          _         _\r\n\
 |  _  |   __|  __   _| |_ _ ___| |_\r\n\
 |   __|   __| |__| | . | | |  _| '_|\r\n\
-|__|  |_____|      |___|___|___|_,_| v0.1\r\n\r\n");
+|__|  |_____|      |___|___|___|_,_| v0.2\r\n\r\n");
 
     // Open and Read file
     char* Buffer = OpenReadFile(argv[1]);
