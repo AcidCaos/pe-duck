@@ -175,6 +175,16 @@ typedef struct _IMAGE_SECTION_HEADER {
 #define IMAGE_SCN_MEM_READ               (0x40000000)
 #define IMAGE_SCN_MEM_WRITE              (0x80000000)
 
+// Represents the data directory.
+// https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
+
+typedef struct _IMAGE_DATA_DIRECTORY {
+  DWORD VirtualAddress;
+  DWORD Size;
+} IMAGE_DATA_DIRECTORY, *PIMAGE_DATA_DIRECTORY;
+
+#define IMAGE_NUMBEROF_DIRECTORY_ENTRIES (16) // The Data directory can have up to 16 entries.
+
 // Represents the optional header format.
 // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_optional_header32
 
@@ -209,7 +219,7 @@ typedef struct _IMAGE_OPTIONAL_HEADER {
     DWORD                SizeOfHeapCommit;
     DWORD                LoaderFlags;
     DWORD                NumberOfRvaAndSizes;
-    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES]; // IMAGE_DIRECTORY_ENTRY_xxx
 } IMAGE_OPTIONAL_HEADER32, *PIMAGE_OPTIONAL_HEADER32;
 
 // The actual structure in WinNT.h is named IMAGE_OPTIONAL_HEADER32 and IMAGE_OPTIONAL_HEADER is defined as IMAGE_OPTIONAL_HEADER32.
@@ -245,7 +255,7 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
     ULONGLONG            SizeOfHeapCommit;
     DWORD                LoaderFlags;
     DWORD                NumberOfRvaAndSizes;
-    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES]; // IMAGE_DIRECTORY_ENTRY_xxx
 } IMAGE_OPTIONAL_HEADER64, *PIMAGE_OPTIONAL_HEADER64;
 
 // IMAGE_xxx_MAGIC
@@ -282,6 +292,41 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
 #define IMAGE_DLLCHARACTERISTICS_WDM_DRIVER            (0x2000) // Driver uses WDM model
 #define IMAGE_DLLCHARACTERISTICS_GUARD_CF              (0x4000) // Image supports Control Flow Guard.
 #define IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE (0x8000)
+
+// IMAGE_DIRECTORY_ENTRY_xxx
+#define IMAGE_DIRECTORY_ENTRY_EXPORT         (0)
+#define IMAGE_DIRECTORY_ENTRY_IMPORT         (1)
+#define IMAGE_DIRECTORY_ENTRY_RESOURCE       (2)
+#define IMAGE_DIRECTORY_ENTRY_EXCEPTION      (3)
+#define IMAGE_DIRECTORY_ENTRY_SECURITY       (4)
+#define IMAGE_DIRECTORY_ENTRY_BASERELOC      (5)
+#define IMAGE_DIRECTORY_ENTRY_DEBUG          (6)
+#define IMAGE_DIRECTORY_ENTRY_COPYRIGHT      (7)
+#define IMAGE_DIRECTORY_ENTRY_ARCHITECTURE   (7)
+#define IMAGE_DIRECTORY_ENTRY_GLOBALPTR      (8)
+#define IMAGE_DIRECTORY_ENTRY_TLS            (9)
+#define IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG    (10)
+#define IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT   (11)
+#define IMAGE_DIRECTORY_ENTRY_IAT            (12)
+#define IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT   (13)
+#define IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR (14)
+
+// Represents the Export module directory
+// winnt.h
+
+typedef struct _IMAGE_EXPORT_DIRECTORY {
+    DWORD   Characteristics;
+    DWORD   TimeDateStamp;
+    WORD    MajorVersion;
+    WORD    MinorVersion;
+    DWORD   Name;
+    DWORD   Base;
+    DWORD   NumberOfFunctions;
+    DWORD   NumberOfNames;
+    DWORD   AddressOfFunctions;    // RVA from base of image
+    DWORD   AddressOfNames;        // RVA from base of image
+    DWORD   AddressOfNameOrdinals; // RVA from base of image
+} IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
 
 // Represents the PE header format.
 // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_nt_headers32

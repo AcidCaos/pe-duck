@@ -6,10 +6,21 @@
 
 #include "pe.h"
 
+#define VERSION "v0.3"
+
+// Global pointers
+
+char* _Image = 0;
+IMAGE_DOS_HEADER* _DOSHeader = 0;
+IMAGE_NT_HEADERS* _NTHeader = 0;
+IMAGE_FILE_HEADER* _FileHeader = 0;
+char* _OptionalHeader = 0;
+IMAGE_SECTION_HEADER* _SectionTable = 0;
+
 // Helper functions
 
 void ErrorExit(wchar_t* name){
-    DWORD err_code = GetLastError();
+    uint32_t err_code = GetLastError();
     TCHAR* formattedStringBuffer = NULL;
 
     // https://learn.microsoft.com/es-es/windows/win32/api/winbase/nf-winbase-formatmessage
@@ -58,7 +69,7 @@ char* OpenReadFile(char* Path) {
     uint32_t ReadBytes;
     uint64_t BufferSize = 0;
 
-    BufferSize = GetFileSize(HFile, (DWORD*) &BufferSize);
+    BufferSize = GetFileSize(HFile, (uint32_t*) &BufferSize);
     if (!BufferSize || BufferSize < 0) ErrorExit(L"GetFileSize");
     printf(" * File size: %lld\r\n", BufferSize);
     
@@ -71,6 +82,33 @@ char* OpenReadFile(char* Path) {
     printf(" * Bytes read: %d\r\n", ReadBytes);
 
     return Buffer;
+}
+
+// RVA helper functions
+
+uint32_t RelativeVirtualAddressToImageOffset(uint32_t VirtualAddress, IMAGE_DOS_HEADER* DOSHeader, IMAGE_FILE_HEADER* FileHeader, char* Image) {
+
+    if(VirtualAddress == 0) return 0;
+
+    IMAGE_NT_HEADERS* NTHeader = (IMAGE_NT_HEADERS*) (Image + DOSHeader->e_lfanew);
+    IMAGE_SECTION_HEADER* SectionTable = (IMAGE_SECTION_HEADER*)((char*) NTHeader + sizeof(IMAGE_NT_SIGNATURE) + sizeof(IMAGE_FILE_HEADER) + NTHeader->FileHeader.SizeOfOptionalHeader);
+
+    uint16_t i;
+    for (i = 0; i < FileHeader->NumberOfSections; i++) {
+        if ((SectionTable->VirtualAddress <= VirtualAddress) && (VirtualAddress < (SectionTable->VirtualAddress + SectionTable->Misc.VirtualSize)))
+            break;
+        SectionTable++;
+    }
+    if (i >= FileHeader->NumberOfSections) {
+        printf("Error: section not found for VA=0x%x\r\n", VirtualAddress);
+        exit(1);
+        return 0;
+    }
+    return (uint32_t) ((uint32_t) SectionTable->PointerToRawData + (VirtualAddress - SectionTable->VirtualAddress));
+}
+
+char* RelativeVirtualAddressToRawAddress(uint32_t VirtualAddress, IMAGE_DOS_HEADER* DOSHeader, IMAGE_FILE_HEADER* FileHeader, char* Image) {
+    return (char*)(Image + RelativeVirtualAddressToImageOffset(VirtualAddress, DOSHeader, FileHeader, Image));
 }
 
 // PE functions
@@ -100,6 +138,62 @@ void PrintDOSHeader(IMAGE_DOS_HEADER* DOSHeader) {
     printf(" * OEM identifier (for e_oeminfo): 0x%x\r\n", DOSHeader->e_oemid);
     printf(" * OEM information; e_oemid specific: 0x%x\r\n", DOSHeader->e_oeminfo);
     printf(" * File address of new exe header: 0x%x\r\n", DOSHeader->e_lfanew);
+}
+
+// DataDirectory: Entry Export
+
+void PrintDataDirectoryEntryExport(IMAGE_EXPORT_DIRECTORY* ExportDirectory) {
+
+    printf("\r\n[+] Export Directory\r\n");
+
+    printf(" * NumberOfFunctions: %d\r\n", ExportDirectory->NumberOfFunctions);
+    printf(" * NumberOfNames: %d\r\n", ExportDirectory->NumberOfNames);
+
+    if (ExportDirectory->NumberOfFunctions <= 0) { // TODO: check "ExportDirectory->NumberOfNames" instead?
+        return;
+    }
+    printf(" * Exported Functions:\r\n");
+
+    uint16_t* AddressOfNameOrdinals = (uint16_t*) RelativeVirtualAddressToRawAddress(ExportDirectory->AddressOfNameOrdinals, _DOSHeader, _FileHeader, _Image);
+    uint32_t* AddressOfFunctions = (uint32_t*) RelativeVirtualAddressToRawAddress(ExportDirectory->AddressOfFunctions, _DOSHeader, _FileHeader, _Image);
+    uint32_t* AddressOfNames = (uint32_t*) RelativeVirtualAddressToRawAddress(ExportDirectory->AddressOfNames, _DOSHeader, _FileHeader, _Image);
+    
+    for (size_t i = 0; i < (size_t)ExportDirectory->NumberOfNames; i++) {
+
+        char* FuncAddr = (char*) RelativeVirtualAddressToRawAddress(AddressOfFunctions[i], _DOSHeader, _FileHeader, _Image);
+        char* FuncName = (char*) RelativeVirtualAddressToRawAddress(AddressOfNames[i], _DOSHeader, _FileHeader, _Image);
+        
+        if (!FuncName || !FuncAddr) continue;
+
+        uint32_t Ordinal = ExportDirectory->Base + AddressOfNameOrdinals[i];
+        uint32_t FunctionRVA = (uint32_t) AddressOfFunctions[AddressOfNameOrdinals[i]];
+        uint32_t NameRVA = (uint32_t) AddressOfNames[i];
+
+        uint32_t ImageOffset = RelativeVirtualAddressToImageOffset(AddressOfFunctions[AddressOfNameOrdinals[i]], _DOSHeader, _FileHeader, _Image);
+        
+        printf("   - Ordinal=0x%x FunctionRVA=0x%x (ImageOffset=0x%x) NameRVA=0x%x FunctionName=%s\r\n", Ordinal, FunctionRVA, ImageOffset, NameRVA, FuncName);
+    }
+}
+
+void PrintDataDirectory(IMAGE_DATA_DIRECTORY* DataDirectory, uint32_t NumberOfRvaAndSizes) {
+
+    // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
+
+    for (uint32_t i = 0; i < NumberOfRvaAndSizes; i++) {
+        switch (i) {
+        case IMAGE_DIRECTORY_ENTRY_EXPORT:
+            IMAGE_EXPORT_DIRECTORY *ExportDirectory = (IMAGE_EXPORT_DIRECTORY *)(RelativeVirtualAddressToRawAddress(
+                DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress,
+                _DOSHeader,
+                _FileHeader,
+                _Image));
+            PrintDataDirectoryEntryExport(ExportDirectory);
+            break;
+        
+        default:
+            continue;
+        }
+    }
 }
 
 // Image Optional Header: helper functions
@@ -214,6 +308,8 @@ void PrintOptionalHeader32(IMAGE_OPTIONAL_HEADER32* OptionalHeader) {
     printf(" * Size of heap commit: 0x%x\r\n", OptionalHeader->SizeOfHeapCommit);
     printf(" * Loader flags: 0x%x\r\n", OptionalHeader->LoaderFlags); // TODO map
     printf(" * Number of RVA and sizes: 0x%x\r\n", OptionalHeader->NumberOfRvaAndSizes);
+
+    PrintDataDirectory(OptionalHeader->DataDirectory, OptionalHeader->NumberOfRvaAndSizes);
 }
 
 void PrintOptionalHeader64(IMAGE_OPTIONAL_HEADER64* OptionalHeader) {
@@ -250,11 +346,13 @@ void PrintOptionalHeader64(IMAGE_OPTIONAL_HEADER64* OptionalHeader) {
     printf(" * Size of heap commit: 0x%llx\r\n", OptionalHeader->SizeOfHeapCommit);
     printf(" * Loader flags: 0x%x\r\n", OptionalHeader->LoaderFlags); // TODO map
     printf(" * Number of RVA and sizes: 0x%x\r\n", OptionalHeader->NumberOfRvaAndSizes);
+
+    PrintDataDirectory(OptionalHeader->DataDirectory, OptionalHeader->NumberOfRvaAndSizes);
 }
 
-// Section
+// Symbol Table
 
-void PrintSymbols(DWORD PointerToSymbolTable, DWORD NumberOfSymbols) {
+void PrintSymbols(uint32_t PointerToSymbolTable, uint32_t NumberOfSymbols) {
     // TODO
 }
 
@@ -408,14 +506,17 @@ void PrintNTHeader(IMAGE_NT_HEADERS* NTHeader) {
     printf(" * Signature: 0x%x\r\n", NTHeader->Signature);
 
     IMAGE_FILE_HEADER* FileHeader = (IMAGE_FILE_HEADER*) &NTHeader->FileHeader;
+    _FileHeader = FileHeader;
     PrintFileHeader(FileHeader);
 
     if (FileHeader->Machine == IMAGE_FILE_MACHINE_I386) {
         IMAGE_OPTIONAL_HEADER32* OptionalHeader = (IMAGE_OPTIONAL_HEADER32*) &NTHeader->OptionalHeader;
+        _OptionalHeader = (char*) OptionalHeader;
         PrintOptionalHeader32(OptionalHeader);
     }
     else if (FileHeader->Machine == IMAGE_FILE_MACHINE_IA64 || FileHeader->Machine == IMAGE_FILE_MACHINE_AMD64) {
         IMAGE_OPTIONAL_HEADER64* OptionalHeader = (IMAGE_OPTIONAL_HEADER64*) &NTHeader->OptionalHeader;
+        _OptionalHeader = (char*) OptionalHeader;
         PrintOptionalHeader64(OptionalHeader);
     }
 }
@@ -537,11 +638,11 @@ void PrintSectionHeader(IMAGE_SECTION_HEADER* SectionHeader) {
     PrintSectionCharacteristics(SectionHeader->Characteristics);
 }
 
-void PrintSectionsHeaders(IMAGE_SECTION_HEADER* SectionTable, WORD NumberOfSections) {
+void PrintSectionsHeaders(IMAGE_SECTION_HEADER* SectionTable, uint16_t NumberOfSections) {
 
     printf("\r\n[+] Sections headers\r\n");
 
-    for (WORD i = 0; i < NumberOfSections; i++) {
+    for (uint16_t i = 0; i < NumberOfSections; i++) {
         IMAGE_SECTION_HEADER* SectionHeader = &SectionTable[i];
         PrintSectionHeader(SectionHeader);
     }
@@ -552,18 +653,23 @@ void PrintSectionsHeaders(IMAGE_SECTION_HEADER* SectionTable, WORD NumberOfSecti
 void PrintPE(char* Buffer) {
 
     // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
-    
+
+    _Image = Buffer;
+
     // Print DOS header
     IMAGE_DOS_HEADER* DOSHeader = (IMAGE_DOS_HEADER*) Buffer;
+    _DOSHeader = DOSHeader;
     PrintDOSHeader(DOSHeader);
 
     // Print NT header
     IMAGE_NT_HEADERS* NTHeader = (IMAGE_NT_HEADERS*) (Buffer + DOSHeader->e_lfanew);
+    _NTHeader = NTHeader;
     PrintNTHeader(NTHeader);
 
     // Print Sections headers
-    IMAGE_SECTION_HEADER* SectionTable = (IMAGE_SECTION_HEADER*) (((char*) NTHeader) + sizeof(IMAGE_NT_HEADERS));
-    WORD NumberOfSections = NTHeader->FileHeader.NumberOfSections;
+    IMAGE_SECTION_HEADER* SectionTable = (IMAGE_SECTION_HEADER*)((char*) NTHeader + sizeof(IMAGE_NT_SIGNATURE) + sizeof(IMAGE_FILE_HEADER) + NTHeader->FileHeader.SizeOfOptionalHeader);
+    _SectionTable = SectionTable;
+    uint16_t NumberOfSections = NTHeader->FileHeader.NumberOfSections;
     PrintSectionsHeaders(SectionTable, NumberOfSections);
 }
 
@@ -585,7 +691,7 @@ int main(int argc, char* argv[]) {
  _____ _____          _         _\r\n\
 |  _  |   __|  __   _| |_ _ ___| |_\r\n\
 |   __|   __| |__| | . | | |  _| '_|\r\n\
-|__|  |_____|      |___|___|___|_,_| v0.2\r\n\r\n");
+|__|  |_____|      |___|___|___|_,_| " VERSION "\r\n\r\n");
 
     // Open and Read file
     char* Buffer = OpenReadFile(argv[1]);
