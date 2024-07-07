@@ -175,6 +175,50 @@ void PrintDataDirectoryEntryExport(IMAGE_EXPORT_DIRECTORY* ExportDirectory) {
     }
 }
 
+void PrintDataDirectoryEntryImport(IMAGE_IMPORT_DESCRIPTOR* ImportDirectory, uint32_t Size) {
+
+    printf("\r\n[+] Import Directory\r\n");
+    printf(" * Import Directory: 0x%x\r\n", (char*) ImportDirectory);
+    printf(" * Size: %d\r\n", Size);
+
+    if (ImportDirectory == 0 || Size == 0) return;
+
+    for(size_t i = 0; i < Size; i++) {
+
+        if (ImportDirectory[i].OriginalFirstThunk == 0 || ImportDirectory[i].FirstThunk == 0) break;
+
+        char* ModuleName = (char*) RelativeVirtualAddressToRawAddress(ImportDirectory[i].Name, _DOSHeader, _FileHeader, _Image);
+        printf(" * Module Name: %s\r\n", ModuleName);
+
+        if (ImportDirectory[i].FirstThunk == 0) continue;
+
+        if (_FileHeader->Machine == IMAGE_FILE_MACHINE_I386) {
+            IMAGE_THUNK_DATA32* ThunkData = (IMAGE_THUNK_DATA32*) RelativeVirtualAddressToRawAddress(ImportDirectory[i].FirstThunk, _DOSHeader, _FileHeader, _Image);
+            while (ThunkData->u1.Ordinal != 0) {
+                if (ThunkData->u1.Ordinal & IMAGE_ORDINAL_FLAG32) {
+                    printf("   - Ordinal (32-bit mask): 0x%llx\r\n", ThunkData->u1.Ordinal - IMAGE_ORDINAL_FLAG32);
+                } else {
+                    IMAGE_IMPORT_BY_NAME* ImportByName = (IMAGE_IMPORT_BY_NAME*) RelativeVirtualAddressToRawAddress(ThunkData->u1.AddressOfData, _DOSHeader, _FileHeader, _Image);
+                    printf("   - Hint=0x%x FunctionName=%s\r\n", ImportByName->Hint, ImportByName->Name);
+                }
+                ThunkData = (IMAGE_THUNK_DATA32*) ((char*) ThunkData + sizeof(IMAGE_THUNK_DATA32));
+            }
+        }
+        else if (_FileHeader->Machine == IMAGE_FILE_MACHINE_IA64 || _FileHeader->Machine == IMAGE_FILE_MACHINE_AMD64) {
+            IMAGE_THUNK_DATA64* ThunkData = (IMAGE_THUNK_DATA64*) RelativeVirtualAddressToRawAddress(ImportDirectory[i].FirstThunk, _DOSHeader, _FileHeader, _Image);
+            while (ThunkData->u1.Ordinal != 0) {
+                if (ThunkData->u1.Ordinal & IMAGE_ORDINAL_FLAG64) {
+                    printf("   - Ordinal (64-bit mask): 0x%llx\r\n", ThunkData->u1.Ordinal - IMAGE_ORDINAL_FLAG64);
+                } else {
+                    IMAGE_IMPORT_BY_NAME* ImportByName = (IMAGE_IMPORT_BY_NAME*) RelativeVirtualAddressToRawAddress(ThunkData->u1.AddressOfData, _DOSHeader, _FileHeader, _Image);
+                    printf("   - Hint=0x%x FunctionName=%s\r\n", ImportByName->Hint, ImportByName->Name);
+                }
+                ThunkData = (IMAGE_THUNK_DATA64*) ((char*) ThunkData + sizeof(IMAGE_THUNK_DATA64));
+            }
+        }
+    }
+}
+
 void PrintDataDirectory(IMAGE_DATA_DIRECTORY* DataDirectory, uint32_t NumberOfRvaAndSizes) {
 
     // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_data_directory
@@ -182,14 +226,34 @@ void PrintDataDirectory(IMAGE_DATA_DIRECTORY* DataDirectory, uint32_t NumberOfRv
     for (uint32_t i = 0; i < NumberOfRvaAndSizes; i++) {
         switch (i) {
         case IMAGE_DIRECTORY_ENTRY_EXPORT:
-            IMAGE_EXPORT_DIRECTORY *ExportDirectory = (IMAGE_EXPORT_DIRECTORY *)(RelativeVirtualAddressToRawAddress(
+            IMAGE_EXPORT_DIRECTORY* ExportDirectory = (IMAGE_EXPORT_DIRECTORY*) (RelativeVirtualAddressToRawAddress(
                 DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress,
                 _DOSHeader,
                 _FileHeader,
                 _Image));
             PrintDataDirectoryEntryExport(ExportDirectory);
             break;
-        
+        case IMAGE_DIRECTORY_ENTRY_IMPORT:
+            IMAGE_IMPORT_DESCRIPTOR* ImportDirectory = (IMAGE_IMPORT_DESCRIPTOR*) RelativeVirtualAddressToRawAddress(
+                DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress,
+                _DOSHeader,
+                _FileHeader,
+                _Image);
+            PrintDataDirectoryEntryImport(ImportDirectory, DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size);
+            break;
+        case IMAGE_DIRECTORY_ENTRY_RESOURCE:
+        case IMAGE_DIRECTORY_ENTRY_EXCEPTION:
+        case IMAGE_DIRECTORY_ENTRY_SECURITY:
+        case IMAGE_DIRECTORY_ENTRY_BASERELOC:
+        case IMAGE_DIRECTORY_ENTRY_DEBUG:
+        case IMAGE_DIRECTORY_ENTRY_ARCHITECTURE:
+        case IMAGE_DIRECTORY_ENTRY_GLOBALPTR:
+        case IMAGE_DIRECTORY_ENTRY_TLS:
+        case IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG:
+        case IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT:
+        case IMAGE_DIRECTORY_ENTRY_IAT:
+        case IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT:
+        case IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR:
         default:
             continue;
         }
@@ -353,7 +417,15 @@ void PrintOptionalHeader64(IMAGE_OPTIONAL_HEADER64* OptionalHeader) {
 // Symbol Table
 
 void PrintSymbols(uint32_t PointerToSymbolTable, uint32_t NumberOfSymbols) {
-    // TODO
+    
+    printf("\r\n[+] Symbol Table\r\n");
+    printf(" * Pointer to symbol table: 0x%x\r\n", PointerToSymbolTable);
+    printf(" * Number of symbols: 0x%x\r\n", NumberOfSymbols);
+
+    if (PointerToSymbolTable == 0 || NumberOfSymbols == 0) return;
+    
+    // IMAGE_SYMBOL* SymbolTable = (IMAGE_SYMBOL*) RelativeVirtualAddressToRawAddress(PointerToSymbolTable, _DOSHeader, _FileHeader, _Image);
+
 }
 
 // File Header: helper functions
@@ -489,7 +561,8 @@ void PrintFileHeader(IMAGE_FILE_HEADER* FileHeader) {
     printf(" * Characteristics (0x%x):\r\n", FileHeader->Characteristics);
     PrintFileHeaderCharacteristics(FileHeader->Characteristics);
 
-    // PrintSymbols(FileHeader->PointerToSymbolTable, FileHeader->NumberOfSymbols);
+    // This values should be zero for an image because COFF debugging information is deprecated.
+    PrintSymbols(FileHeader->PointerToSymbolTable, FileHeader->NumberOfSymbols);
 }
 
 // NT Header

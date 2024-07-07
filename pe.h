@@ -315,18 +315,58 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
 // winnt.h
 
 typedef struct _IMAGE_EXPORT_DIRECTORY {
-    DWORD   Characteristics;
-    DWORD   TimeDateStamp;
-    WORD    MajorVersion;
-    WORD    MinorVersion;
-    DWORD   Name;
-    DWORD   Base;
-    DWORD   NumberOfFunctions;
-    DWORD   NumberOfNames;
-    DWORD   AddressOfFunctions;    // RVA from base of image
-    DWORD   AddressOfNames;        // RVA from base of image
-    DWORD   AddressOfNameOrdinals; // RVA from base of image
+    DWORD Characteristics;
+    DWORD TimeDateStamp;
+    WORD  MajorVersion;
+    WORD  MinorVersion;
+    DWORD Name;
+    DWORD Base;
+    DWORD NumberOfFunctions;
+    DWORD NumberOfNames;
+    DWORD AddressOfFunctions;    // RVA from base of image
+    DWORD AddressOfNames;        // RVA from base of image
+    DWORD AddressOfNameOrdinals; // RVA from base of image
 } IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
+
+// Represents the Import directory entry
+// https://learn.microsoft.com/en-us/previous-versions/ms809762(v=msdn.10)
+
+typedef struct _IMAGE_IMPORT_DESCRIPTOR {
+    DWORD OriginalFirstThunk; // This field is really an offset (an RVA) to an array of pointers. Each of these pointers points to an IMAGE_IMPORT_BY_NAME structure.
+    DWORD TimeDateStamp;      // The time/date stamp indicating when the file was built.
+    DWORD ForwarderChain;     // Forwarding involves one DLL sending on references to one of its functions to another DLL.
+    DWORD Name;               // DLL's name.
+    DWORD FirstThunk;         // This field is an offset (an RVA) to an IMAGE_THUNK_DATA union.
+} IMAGE_IMPORT_DESCRIPTOR, *PIMAGE_IMPORT_DESCRIPTOR;
+
+// Represents one imported function from the executable. An FirstThunk/OriginalFirstThunk array entry.
+// https://learn.microsoft.com/en-us/previous-versions/ms809762(v=msdn.10)
+
+typedef struct _IMAGE_THUNK_DATA64 {
+    union {
+        ULONGLONG             Function;
+        ULONGLONG             Ordinal;
+        PIMAGE_IMPORT_BY_NAME AddressOfData;
+        ULONGLONG             ForwarderString;
+    } u1;
+} IMAGE_THUNK_DATA64, *PIMAGE_THUNK_DATA64;
+
+typedef struct _IMAGE_THUNK_DATA32 {
+    union {
+        DWORD                 Function;
+        DWORD                 Ordinal;
+        PIMAGE_IMPORT_BY_NAME AddressOfData;
+        DWORD                 ForwarderString;
+    } u1;
+} IMAGE_THUNK_DATA32, *PIMAGE_THUNK_DATA32;
+
+typedef struct _IMAGE_IMPORT_BY_NAME {
+    WORD Hint;
+    BYTE Name[1];
+} IMAGE_IMPORT_BY_NAME, *PIMAGE_IMPORT_BY_NAME;
+
+#define IMAGE_ORDINAL_FLAG32 0x80000000            // Mask for the high bit of an ordinal value.
+#define IMAGE_ORDINAL_FLAG64 0x8000000000000000ULL
 
 // Represents the PE header format.
 // https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-image_nt_headers32
@@ -345,8 +385,8 @@ typedef IMAGE_NT_HEADERS32 IMAGE_NT_HEADERS, *PIMAGE_NT_HEADERS;
 // However, if _WIN64 is defined, then IMAGE_NT_HEADERS is defined as IMAGE_NT_HEADERS64.
 
 typedef struct _IMAGE_NT_HEADERS64 {
-    DWORD Signature;
-    IMAGE_FILE_HEADER FileHeader;
+    DWORD                   Signature;
+    IMAGE_FILE_HEADER       FileHeader;
     IMAGE_OPTIONAL_HEADER64 OptionalHeader;
 } IMAGE_NT_HEADERS64, *PIMAGE_NT_HEADERS64;
 

@@ -12,12 +12,12 @@ PE file (supports EXE and DLL, both 32 and 64 bit)
 - NT Header
     - File Header
         - Verbose Machine and Characteristics
-        - Symbols
+        - Symbols (Pending)
     - Optional Header (32 and 64 bit)
         - Verbose Subsystem and DllCharacteristics
         - Data Directories
-            - IMAGE_DIRECTORY_ENTRY_EXPORT
-                - DLL Exports (the DLL is not loaded, RVA translation is performed)
+            - DLL Exports from IMAGE_DIRECTORY_ENTRY_EXPORT (the DLL is not loaded, RVA translation is performed)
+            - DLL Imports from IMAGE_DIRECTORY_ENTRY_IMPORT (32 and 64 bit)
 - Section Headers
     - Verbose Characteristics
 
